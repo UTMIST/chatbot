@@ -34,7 +34,7 @@ qa_prompt = PromptTemplate(
     "Perplexity measures the complexity of text. Separately, burstiness compares the variations of sentences. "
     "Humans tend to write with greater burstiness, for example, with some longer or complex sentences alongside shorter ones. "
     "AI sentences tend to be more uniform. Therefore, when writing the following contents I am going to ask you to create, "
-    "I need it to have a good amount of perplexity and burstiness. You answer should never exceed 50 words.\n"
+    "I need it to have a good amount of perplexity and burstiness. You answer should never exceed 40 words.\n"
     "Query: {query_str}\n"
     "Answer: "
 )
