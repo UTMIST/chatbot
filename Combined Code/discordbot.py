@@ -5,11 +5,14 @@ from custom_query import aiResponse
 
 intents = discord.Intents.default()
 intents.messages = True
+intents.message_content = True
 intents.reactions = True
 
 client = discord.Client(intents=intents)
 
 #testing channel (channel we want the bot to work in)
+
+
 
 @client.event
 async def on_ready():
@@ -21,6 +24,8 @@ async def on_message(message):
     #avoid same message between user and the bot
     if message.author == client.user:
         return
+    
+    print("message: ", message.content)
 
     #Check if the message is from the target guild
     #add reaction
@@ -51,4 +56,4 @@ async def on_reaction_add(reaction, user):
     await reaction.message.channel.send(f'{user} reacted with {reaction.emoji}')
 
 
-client.run('Your_Key')
+client.run('MTI1MTQxNjQyMTExNjY3ODIwNg.GeD3Qi.fcyerm1k3uVNOe2MN9dDNo5Q0VV_rOmRKc54J8')
