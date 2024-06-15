@@ -1,16 +1,24 @@
 # This code takes the AI functions and incorporates into a discord Bot 
 import discord
 from discord.ext import commands
-from custom_query import aiResponse
+from custom_query import aiResponse, classifyRelevance
+import os
 
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
 intents.reactions = True
 
+from pathlib import Path
+
+from dotenv import load_dotenv
+
 client = discord.Client(intents=intents)
 
 #testing channel (channel we want the bot to work in)
+
+env_path = Path("..") / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 
@@ -38,7 +46,13 @@ async def on_message(message):
         
     else:
         print(message.content)
+
+        relevance = classifyRelevance(message.content)
+
+        print("relevance: ", relevance)
+
         output = aiResponse(message.content)
+        
         await message.channel.send(output)
 
 #addressing edited messages
@@ -56,4 +70,4 @@ async def on_reaction_add(reaction, user):
     await reaction.message.channel.send(f'{user} reacted with {reaction.emoji}')
 
 
-client.run('MTI1MTQxNjQyMTExNjY3ODIwNg.GeD3Qi.fcyerm1k3uVNOe2MN9dDNo5Q0VV_rOmRKc54J8')
+client.run(os.environ.get("DISCORD_BOT_TOKEN"))
