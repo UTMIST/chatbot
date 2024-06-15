@@ -51,4 +51,4 @@ async def on_reaction_add(reaction, user):
     await reaction.message.channel.send(f'{user} reacted with {reaction.emoji}')
 
 
-client.run('MTI1MTQxNjQyMTExNjY3ODIwNg.GeD3Qi.fcyerm1k3uVNOe2MN9dDNo5Q0VV_rOmRKc54J8')
+client.run("Your-token")
