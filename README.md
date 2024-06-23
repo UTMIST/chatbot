@@ -7,4 +7,5 @@
   - windows (powershell): `utmist-chatbot-env\Scripts\activate`
   - mac/unix: `source utmist-chatbot-env/bin/activate`
 - next install dependencies via `pip install requirements.txt`
+  - if the above command fails run: `pip install --upgrade -r requirements.txt`
 - run the project via `python app/main.py`
