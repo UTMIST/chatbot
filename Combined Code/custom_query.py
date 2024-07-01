@@ -11,6 +11,7 @@ from llama_index.core import (
 import os.path
 import os
 from enum import Enum
+from utils import strip_whole_str
 # Option 2: return a string (we use a raw LLM call for illustration)
 
 from llama_index.llms.openai import OpenAI
@@ -95,11 +96,17 @@ def aiResponse(input):
 
 
 class Relevance(Enum):
-    known = "known"
-    unknown = "unknown"
-    irrelevant = "irrelevant"
+    KNOWN = "known"
+    UNKNOWN = "unknown"
+    IRRELEVANT = "irrelevant"
 
-def classifyRelevance(input, retriever = retriever):
+def classifyRelevance(input, retriever = retriever) -> Relevance:
+    """
+    Classifies how relevant a particular user input is to UTMIST.
+
+    :param input: The user input to classify.  
+    :return: ``Relevance.known`` if the input is known, ``Relevance.unknown`` if the input is unknown, and ``Relevance.irrelevant`` if the input is irrelevant.
+    """
 
     RELEVANCE_DETERMINATION_PROMPT = """You are talking to a user as a representative of a club called the University of Toronto Machine Intelligence Team (UTMIST). 
     
@@ -108,13 +115,11 @@ Your job is to determine whether the user's query is relevant to any of the foll
 1. AI and machine learning related questions
 2. UTMIST club information and events
 
-<context>
-{context_str}
-</context>
+Note that when the user refers to "you" or "your", they are referring to UTMIST.    
 
 <possible scenarios>
 
-1. SCENARIO: If the query seems relevant to UTMIST or AI and the "context" explicitly contains information about the query; OUTPUT: "known"
+1. SCENARIO: If the query seems relevant to UTMIST (i.e. events or general info) or AI and the "context" explicitly contains information about the query; OUTPUT: "known"
 2. SCENARIO: If the query is about GENERAL knowledge in AI/ML but NOT about UTMIST; OUTPUT: "known"
 3. SCENARIO: If the query seems relevant to UTMIST or AI but the information is not in "context" AND it is NOT GENERAL knowledge about AI/ML; OUTPUT: "unknown"
 4. SCENARIO: If the query is completely irrelevant to the criteria above; OUTPUT: "irrelevant"
@@ -151,17 +156,88 @@ Query: What is the GenAI conference?
 
 Output: relevant
 
-### END OF EXAMPLES ###
-
-Query: {query_str}"""
+### END OF EXAMPLES ###"""
 
     nodes = retriever.retrieve(input)
 
     context_str = "\n\n".join([n.node.get_content() for n in nodes])
 
-    formatted_relevance_prompt = RELEVANCE_DETERMINATION_PROMPT.format(context_str = context_str, query_str = input)    
+    user_query = f"""<context>
+{context_str}
+</context>
 
-    response : ChatCompletion = openai_client_instance.chat.completions.create(model = "gpt-3.5-turbo", messages=[{"role" : "system", "content" : formatted_relevance_prompt}])
+Query: {input}
 
-    return response.choices[0].message.content.strip("Output:").strip()
+Output: """
+    
+    # Retry up to 3 times in case GPT returns wrong value.
+    for i in range(3):
+
+        response : str = get_openai_response_content(system_prompt=RELEVANCE_DETERMINATION_PROMPT, model = "gpt-3.5-turbo", messages=[{"role" : "user", "content" : user_query}])
+        response = strip_whole_str(response, "Output:").strip()
+
+        try:
+            return Relevance(response)
+        except ValueError:
+            print("value error: " + response)
+            pass
+
+    return Relevance.UNKNOWN
+
+def get_response_with_relevance(input : str, past_chat_history = [], retriever = retriever) -> str: 
+
+    relevance = classifyRelevance(input, retriever = retriever)
+
+    print("relevance: " + str(relevance))
+    if relevance == Relevance.KNOWN:
+        return aiResponse(input)
+    elif relevance == Relevance.UNKNOWN:
+        return get_unknown_response(input, past_chat_history, retriever)
+    else:
+        return "I'm sorry, I cannot answer that question as I am only here to provide information about UTMIST and AI/ML. If you think this is a mistake, please contact the UTMIST team."
+
+def get_unknown_response(latest_user_input : str, past_chat_history = [], retriever = retriever) -> str:
+    """
+    Returns a response when the input is classified as irrelevant.
+
+    :param input: The user input to respond to.
+    :param past_chat_history: The chat history to consider when responding. 
+    :return: A response to the user input.
+    """
+
+    UNKNOWN_RESPONSE_PROMPT = """You are talking to a student as a representative of the University of Toronto Machine Intelligence Team (UTMIST), a student group dedicated to educating students about AI/ML through various events (conferences, workshops), academic programs, and other initiatives. 
+
+Given the chat history, you must try to answer the user's latest inquiry using your knowledge of AI and nothing else. This means you must not use knowledge on any other topic other than UTMIST, AI, and/or machine learning.
+
+If you cannot answer the user's query using your knowledge of AI/ML, you must tell the student that you don't know the answer.
+
+<RULES>
+1. DO NOT provide any information that is not related to AI/ML and/or computer science.
+2. DO NOT make up information that you do not 100% know to be true.
+</RULES>"""
+
+    messages = list(past_chat_history)
+    messages.append({"role" : "user", "content" : latest_user_input})
+
+    return get_openai_response_content(system_prompt=UNKNOWN_RESPONSE_PROMPT, model = "gpt-3.5-turbo", messages=messages)
+
+
+def get_openai_response_content(system_prompt = "", messages = [], model = "gpt-3.5-turbo", **kwargs) -> str:
+    assert messages or system_prompt, "prompt or messages must be provided"
+    
+    if system_prompt:
+        messages.insert(0, {"role" : "system", "content" : system_prompt}) 
+
+    response = _get_openai_response(messages = messages, model = model, **kwargs)
+    return _extract_openai_response_content(response)   
+
+def _extract_openai_response_content(response : ChatCompletion) -> str:
+    assert isinstance(response, ChatCompletion), "response must be a ChatCompletion object"
+    return response.choices[0].message.content
+
+def _get_openai_response(messages = [], model = "gpt-3.5-turbo", **kwargs) -> ChatCompletion:
+    response : ChatCompletion = openai_client_instance.chat.completions.create(model = model, messages=messages, **kwargs)
+    return response
+
+
 
