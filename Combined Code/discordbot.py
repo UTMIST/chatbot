@@ -1,7 +1,7 @@
 # This code takes the AI functions and incorporates into a discord Bot 
 import discord
 from discord.ext import commands
-from custom_query import aiResponse, classifyRelevance
+from custom_query import aiResponse, classifyRelevance, get_response_with_relevance
 import os
 
 intents = discord.Intents.default()
@@ -51,7 +51,7 @@ async def on_message(message):
 
         print("relevance: ", relevance)
 
-        output = aiResponse(message.content)
+        output = get_response_with_relevance(message.content)
         
         await message.channel.send(output)
 
