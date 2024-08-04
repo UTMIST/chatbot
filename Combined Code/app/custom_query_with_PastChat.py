@@ -1,5 +1,6 @@
 from llama_index.core.query_engine import CustomQueryEngine
 from llama_index.core.retrievers import BaseRetriever
+from llama_index.core.schema import NodeWithScore
 from llama_index.core import get_response_synthesizer
 from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core import (
@@ -7,7 +8,7 @@ from llama_index.core import (
     SimpleDirectoryReader,
     StorageContext,
     load_index_from_storage,
-    Document
+    Document,
 )
 import os.path
 import os
@@ -20,6 +21,7 @@ from pathlib import Path
 import openai
 from openai import OpenAI as openai_client
 from openai.types.chat import ChatCompletion
+from llama_index.core.extractors import SummaryExtractor
 
 from dotenv import load_dotenv
 
@@ -52,6 +54,8 @@ retriever = index.as_retriever()
 #Chat History management
 chat_history = []
 
+SUMMARY_EXTRACTOR = SummaryExtractor(summaries=["prev", "self", "next"], llm=embedding_model)
+
 def update_chat_history(role, message):
     '''
     :param role: The role of the message sender ("user" or "bot").
@@ -59,10 +63,41 @@ def update_chat_history(role, message):
     '''
     chat_history.append({"role":role, "content": message})
 
-def embed_chat_history(chat_history):
+def embed_chat_history(chat_history : list[dict]) -> VectorStoreIndex:
     conversations = [Document(text=message['content']) for message in chat_history]
     index = VectorStoreIndex.from_documents(conversations, embedding_model = embedding_model)
-    index.storage_context.persist()
+    return index
+
+def _retrieve_context_for_query(query_str : str, past_chat_history : list[dict], chat_depth_for_retrieval = 2) -> list[NodeWithScore]:
+    
+    retrieved_knowledge = set()
+    returned_nodes = []
+
+    def append_to_returned_nodes(nodes : list[NodeWithScore]):
+        for node in nodes:
+            if node.get_content() in retrieved_knowledge:
+                continue
+            returned_nodes.append(node)
+            retrieved_knowledge.add(node.get_content)
+
+    for i in range(chat_depth_for_retrieval):
+        if len(past_chat_history) < i:
+            break
+
+        chat = past_chat_history[-i]        
+        nodes = retriever.retrieve(chat['content'])
+        append_to_returned_nodes(nodes)
+
+    nodes = retriever.retrieve(query_str)
+    append_to_returned_nodes(nodes)
+
+    return returned_nodes
+
+
+
+
+
+
 
 qa_prompt = PromptTemplate(
     "Context information is below.\n"
@@ -89,20 +124,21 @@ class RAGStringQueryEngine(CustomQueryEngine):
     qa_prompt: PromptTemplate
 
     # Custom query that incorporates chat history
-    def custom_query(self, query_str: str, past_chat_history: list):
-        # Embed past chat history
-        embed_chat_history(past_chat_history)
+    def custom_query(self, query_str: str, past_chat_history: list[dict]):
+        # NOTE: Embedding past chat history 
+        # embed_chat_history(past_chat_history)
 
         # Retrieve past conversations from the vector database
-        past_nodes = self.retriever.retrieve(query_str)
-        past_context_str = "\n\n".join([n.node.get_content() for n in past_nodes])
 
+        # summarize the past chat
+        # past_nodes = self.retriever.retrieve(query_str)
+        # past_context_str = "\n\n".join([n.node.get_content() for n in past_nodes])
         # Address current context
-        nodes = self.retriever.retrieve(query_str)
+        nodes = _retrieve_context_for_query(query_str, past_chat_history)
         context_str = "\n\n".join([n.node.get_content() for n in nodes])
 
         # Combine past and current contexts
-        combined_context = f'{past_context_str}\n\n{context_str}'
+        combined_context = f'{context_str}'
 
 
         response = self.llm.complete(
@@ -192,7 +228,7 @@ Output: relevant
 
 ### END OF EXAMPLES ###"""
 
-    nodes = retriever.retrieve(input)
+    nodes = _retrieve_context_for_query(input, chat_history)
 
     context_str = "\n\n".join([n.node.get_content() for n in nodes])
 

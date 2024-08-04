@@ -18,7 +18,7 @@ from openai import OpenAI as openai_client
 from dotenv import load_dotenv
 import faiss
 import numpy as np
-import torch
+
 # Load environment variables
 env_path = Path("..") / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -86,33 +86,33 @@ def ai_response(input):
     new_messages.append((input, response))
     return response
 
-def update_vector_database():
-    global new_messages
-    index_path = 'path_to_your_faiss_index'
-    document_store_path = 'path_to_your_document_store.npy'
-    if os.path.exists(index_path):
-        index = faiss.read_index(index_path)
-    else:
-        index = faiss.IndexFlatL2(768)  # Dimension of embeddings, adjust accordingly
-    if os.path.exists(document_store_path):
-        document_store = np.load(document_store_path, allow_pickle=True).tolist()
-    else:
-        document_store = []
+# def update_vector_database():
+#     global new_messages
+#     index_path = 'path_to_your_faiss_index'
+#     document_store_path = 'path_to_your_document_store.npy'
+#     if os.path.exists(index_path):
+#         index = faiss.read_index(index_path)
+#     else:
+#         index = faiss.IndexFlatL2(768)  # Dimension of embeddings, adjust accordingly
+#     if os.path.exists(document_store_path):
+#         document_store = np.load(document_store_path, allow_pickle=True).tolist()
+#     else:
+#         document_store = []
 
-    # Add new messages to the FAISS index and document store
-    for message, response in new_messages:
-        inputs = tokenize(message, return_tensors='pt', padding=True, truncation=True)
-        with torch.no_grad():
-            embeddings = model.encoder(**inputs).last_hidden_state.mean(dim=1).cpu().numpy()
-        index.add(embeddings)
-        document_store.append((message, response))
+#     # Add new messages to the FAISS index and document store
+#     for message, response in new_messages:
+#         inputs = tokenize(message, return_tensors='pt', padding=True, truncation=True)
+#         with torch.no_grad():
+#             embeddings = model.encoder(**inputs).last_hidden_state.mean(dim=1).cpu().numpy()
+#         index.add(embeddings)
+#         document_store.append((message, response))
 
-    # Save updated FAISS index and document store
-    faiss.write_index(index, index_path)
-    np.save(document_store_path, np.array(document_store))
+#     # Save updated FAISS index and document store
+#     faiss.write_index(index, index_path)
+#     np.save(document_store_path, np.array(document_store))
 
-    # Clear new messages
-    new_messages = []
+#     # Clear new messages
+#     new_messages = []
 
 async def save_unanswered_queries():
     now = datetime.now()

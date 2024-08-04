@@ -2,7 +2,7 @@
 import discord
 from discord.ext import commands, tasks
 #modified for rag
-from custom_query_with_PastChat import classifyRelevance, aiResponse
+from custom_query_with_PastChat import get_response_with_relevance
 from rag_handler import ai_response, save_unanswered_queries, update_vector_database  
 import os
 from pathlib import Path
@@ -23,7 +23,7 @@ load_dotenv(dotenv_path=env_path)
 async def on_ready():
     print("Bot is now online")
     save_unanswered_queries_task.start()  #modified for rag
-    update_vector_database_task.start()   #modified for rag
+    # update_vector_database_task.start()   #modified for rag
 
 @client.event
 async def on_message(message):
@@ -41,9 +41,8 @@ async def on_message(message):
         await message.channel.send("Welcome to UTMIST!")
         
     else:
-        relevance = classifyRelevance(message.content)  #modified for rag
-        print("relevance: ", relevance)                 #modified for rag
-        output = aiResponse(message.content)
+
+        output = get_response_with_relevance(message.content)
         await message.channel.send(output)
 
 #addressing edited messages
@@ -67,10 +66,10 @@ async def save_unanswered_queries_task():
     await save_unanswered_queries()
 
 #modified for rag
-@tasks.loop(hours=24)  
-async def update_vector_database_task():
-    await client.wait_until_ready()
-    update_vector_database()
+# @tasks.loop(hours=24)  
+# async def update_vector_database_task():
+#     await client.wait_until_ready()
+#     update_vector_database()
 
 
 #client.run(os.environ.get("DISCORD_BOT_TOKEN")) #modified for rag
