@@ -135,6 +135,10 @@ class RAGStringQueryEngine(CustomQueryEngine):
         # past_context_str = "\n\n".join([n.node.get_content() for n in past_nodes])
         # Address current context
         nodes = _retrieve_context_for_query(query_str, past_chat_history)
+        if not nodes:  # If no nodes are found, log the query as unanswered
+            with open("unanswered_queries.txt", "a") as f:
+                f.write(f"{query_str}\n")
+
         context_str = "\n\n".join([n.node.get_content() for n in nodes])
 
         # Combine past and current contexts
