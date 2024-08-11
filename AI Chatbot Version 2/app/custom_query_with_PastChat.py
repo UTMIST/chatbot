@@ -12,44 +12,37 @@ from llama_index.core import (
 import os.path
 import os
 from enum import Enum
-# Option 2: return a string (we use a raw LLM call for illustration)
-
 from llama_index.llms.openai import OpenAI
 from llama_index.core import PromptTemplate
 from pathlib import Path
 import openai
 from openai import OpenAI as openai_client
 from openai.types.chat import ChatCompletion
-
 from dotenv import load_dotenv
 
+# Helper function to strip a substring from a string
 def strip_whole_str(input_str: str, substr: str) -> str:
-    """
-    Removes all occurrences of a specified substring from the input string.
-
-    :param input_str: The original string.
-    :param substr: The substring to remove.
-    :return: The modified string with the specified substring removed.
-    """
     return input_str.replace(substr, '')
 
+# Load environment variables
 env_path = Path("..") / ".env"
 load_dotenv(dotenv_path=env_path)
 
+# Ensure API key is set
 if not os.environ.get("OPENAI_API_KEY"):
-    os.environ["OPENAI_API_KEY"] = "Your Key"
+    os.environ["OPENAI_API_KEY"] = "Your KEY"  # Replace with your actual key
 openai_client_instance = openai
 embedding_model = openai_client(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# load existing index from storage
+# Load existing index from storage
 PERSIST_DIR = "./storage"
 storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
 index = load_index_from_storage(storage_context)
 
-#Combine existing index with new index
+# Combine existing index with new data
 retriever = index.as_retriever()
 
-#Chat History management
+# Chat History management
 chat_history = []
 
 def update_chat_history(role, message):
@@ -57,13 +50,24 @@ def update_chat_history(role, message):
     :param role: The role of the message sender ("user" or "bot").
     :param message: The content of the message.
     '''
-    chat_history.append({"role":role, "content": message})
+    chat_history.append({"role": role, "content": message})
 
 def embed_chat_history(chat_history):
-    conversations = [Document(text=message['content']) for message in chat_history]
-    index = VectorStoreIndex.from_documents(conversations, embedding_model = embedding_model)
-    index.storage_context.persist()
+    global index, retriever  # Declare global variables at the start
 
+    if isinstance(chat_history, list) and all(isinstance(message, dict) for message in chat_history):
+        conversations = [Document(text=message['content']) for message in chat_history]
+
+        # Insert new documents to the storage context
+        for doc in conversations:
+            index.storage_context.insert_document(doc)
+
+        # Rebuild retriever if needed
+        retriever = index.as_retriever()
+    else:
+        raise ValueError("chat_history must be a list of dictionaries with 'content' keys.")
+
+# Define the QA prompt template
 qa_prompt = PromptTemplate(
     "Context information is below.\n"
     "---------------------\n"
@@ -80,7 +84,6 @@ qa_prompt = PromptTemplate(
     "Answer: "
 )
 
-
 class RAGStringQueryEngine(CustomQueryEngine):
     """RAG String Query Engine."""
     retriever: BaseRetriever
@@ -88,60 +91,54 @@ class RAGStringQueryEngine(CustomQueryEngine):
     llm: OpenAI
     qa_prompt: PromptTemplate
 
-    # Custom query that incorporates chat history
     def custom_query(self, query_str: str, past_chat_history: list):
         # Embed past chat history
         embed_chat_history(past_chat_history)
 
-        # Retrieve past conversations from the vector database
-        past_nodes = self.retriever.retrieve(query_str)
-        past_context_str = "\n\n".join([n.node.get_content() for n in past_nodes])
-
-        # Address current context
+        # Retrieve relevant nodes based on the query
         nodes = self.retriever.retrieve(query_str)
         context_str = "\n\n".join([n.node.get_content() for n in nodes])
 
-        # Combine past and current contexts
-        combined_context = f'{past_context_str}\n\n{context_str}'
-
-
+        # Generate response using the combined context
         response = self.llm.complete(
-            qa_prompt.format(context_str=combined_context, query_str=query_str)
+            qa_prompt.format(context_str=context_str, query_str=query_str)
         )
 
         return str(response)
 
 
-
+# Initialize the LLM and synthesizer
 llm = OpenAI(model="gpt-3.5-turbo")
 synthesizer = get_response_synthesizer(response_mode="compact")
 
-#aiResponse combiend with past_chat_history
+# aiResponse function with embedded chat history
 def aiResponse(input, past_chat_history=[]):
+    # Initialize query engine
     query_engine = RAGStringQueryEngine(
         retriever=retriever,
         response_synthesizer=synthesizer,
         llm=llm,
         qa_prompt=qa_prompt,
     )
-    
+
+    # Update chat history with user input
+    update_chat_history("user", input)
+
+    # Generate response
     response = query_engine.custom_query(str(input), past_chat_history)
+
+    # Update chat history with the bot's response
+    update_chat_history("bot", response)
+
     return response
 
+# Relevance classification logic
 class Relevance(Enum):
     KNOWN = "known"
     UNKNOWN = "unknown"
     IRRELEVANT = "irrelevant"
 
-
 def classifyRelevance(input, retriever=retriever) -> Relevance:
-    """
-    Classifies how relevant a particular user input is to UTMIST.
-
-    :param input: The user input to classify.
-    :return: ``Relevance.known`` if the input is known, ``Relevance.unknown`` if the input is unknown, and ``Relevance.irrelevant`` if the input is irrelevant.
-    """
-
     RELEVANCE_DETERMINATION_PROMPT = """You are talking to a user as a representative of a club called the University of Toronto Machine Intelligence Team (UTMIST). 
 
 Your job is to determine whether the user's query is relevant to any of the following, and output one of the responses according to the possible scenarios.
@@ -193,7 +190,6 @@ Output: relevant
 ### END OF EXAMPLES ###"""
 
     nodes = retriever.retrieve(input)
-
     context_str = "\n\n".join([n.node.get_content() for n in nodes])
 
     user_query = f"""<context>
@@ -204,12 +200,8 @@ Query: {input}
 
 Output: """
 
-    # Retry up to 3 times in case GPT returns wrong value.
     for i in range(3):
-
-        response: str = get_openai_response_content(system_prompt=RELEVANCE_DETERMINATION_PROMPT, model="gpt-3.5-turbo",
-                                                    messages=[{"role": "user", "content": user_query}])
-        
+        response = get_openai_response_content(system_prompt=RELEVANCE_DETERMINATION_PROMPT, messages=[{"role": "user", "content": user_query}])
         response = strip_whole_str(response, "Output:").strip()
         try:
             return Relevance(response)
@@ -219,28 +211,17 @@ Output: """
 
     return Relevance.UNKNOWN
 
-
 def get_response_with_relevance(input: str, past_chat_history=[], retriever=retriever) -> str:
     relevance = classifyRelevance(input, retriever=retriever)
-
     print("relevance: " + str(relevance))
     if relevance == Relevance.KNOWN:
-        return aiResponse(input)
+        return aiResponse(input, past_chat_history)
     elif relevance == Relevance.UNKNOWN:
         return get_unknown_response(input, past_chat_history, retriever)
     else:
         return "I'm sorry, I cannot answer that question as I am only here to provide information about UTMIST and AI/ML. If you think this is a mistake, please contact the UTMIST team."
 
-
 def get_unknown_response(latest_user_input: str, past_chat_history=[], retriever=retriever) -> str:
-    """
-    Returns a response when the input is classified as irrelevant.
-
-    :param input: The user input to respond to.
-    :param past_chat_history: The chat history to consider when responding.
-    :return: A response to the user input.
-    """
-
     UNKNOWN_RESPONSE_PROMPT = """You are talking to a student as a representative of the University of Toronto Machine Intelligence Team (UTMIST), a student group dedicated to educating students about AI/ML through various events (conferences, workshops), academic programs, and other initiatives. 
 
 Given the chat history, you must try to answer the user's latest inquiry using your knowledge of AI and nothing else. This means you must not use knowledge on any other topic other than UTMIST, AI, and/or machine learning.
@@ -255,8 +236,7 @@ If you cannot answer the user's query using your knowledge of AI/ML, you must te
     messages = list(past_chat_history)
     messages.append({"role": "user", "content": latest_user_input})
 
-    return get_openai_response_content(system_prompt=UNKNOWN_RESPONSE_PROMPT, model="gpt-3.5-turbo", messages=messages)
-
+    return get_openai_response_content(system_prompt=UNKNOWN_RESPONSE_PROMPT, messages=messages)
 
 def get_openai_response_content(system_prompt="", messages=[], model="gpt-3.5-turbo", **kwargs) -> str:
     assert messages or system_prompt, "prompt or messages must be provided"
@@ -267,11 +247,9 @@ def get_openai_response_content(system_prompt="", messages=[], model="gpt-3.5-tu
     response = _get_openai_response(messages=messages, model=model, **kwargs)
     return _extract_openai_response_content(response)
 
-
 def _extract_openai_response_content(response: ChatCompletion) -> str:
     assert isinstance(response, ChatCompletion), "response must be a ChatCompletion object"
     return response.choices[0].message.content
-
 
 def _get_openai_response(messages=[], model="gpt-3.5-turbo", **kwargs) -> ChatCompletion:
     response: ChatCompletion = openai_client_instance.chat.completions.create(model=model, messages=messages, **kwargs)
