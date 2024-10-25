@@ -12,5 +12,3 @@
   - mac/unix: `source utmist-chatbot-env/bin/activate`
 - next install dependencies via `pip install requirements.txt`
   - if the above command fails run: `pip install --upgrade -r requirements.txt --user`
-- add discord API key to discord_bot.py (hard coded for now)
-- run the project via `python app/discord_bot.py`
