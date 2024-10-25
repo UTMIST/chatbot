@@ -4,3 +4,6 @@ discord
 llama_index
 qdrant-client
 llama-index-vector-stores-qdrant
+numpy 
+matplotlib
+pandas
