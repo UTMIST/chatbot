@@ -77,6 +77,6 @@ async def update_vector_database_task():
     await client.wait_until_ready()
     update_vector_database()
 
-client.run(os.environ.get("DISCORD_BOT_TOKEN")) #modified for rag
-# client.run("Your Key")
+# client.run(os.environ.get("DISCORD_BOT_TOKEN")) #modified for rag
+client.run("Your Key")
 # 
