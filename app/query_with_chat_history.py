@@ -26,9 +26,9 @@ def strip_whole_str(input_str: str, substr: str) -> str:
     return input_str.replace(substr, "")
 
 
-# Load environment variables
-env_path = Path("..") / ".env"
-load_dotenv(dotenv_path=env_path)
+# # Load environment variables
+# env_path = Path("..") / ".env"
+load_dotenv()
 
 # Ensure API key is set
 if not os.environ.get("OPENAI_API_KEY"):
@@ -215,18 +215,23 @@ Query: {input}
 Output: """
 
     for i in range(3):
+
+        print("user_query: " + user_query)
         response = get_openai_response_content(
             system_prompt=RELEVANCE_DETERMINATION_PROMPT,
             messages=[{"role": "user", "content": user_query}],
+
         )
         response = strip_whole_str(response, "Output:").strip()
+        print("response: " + response)
+        
         try:
             return Relevance(response)
         except ValueError:
             print("value error: " + response)
             pass
 
-    return Relevance.UNKNOWN
+    return Relevance.KNOWN
 
 
 def get_response_with_relevance(

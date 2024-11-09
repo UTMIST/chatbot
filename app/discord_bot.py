@@ -10,7 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 intents = discord.Intents.default()
-intents.messages = True
+intents.message_content = True
 # intents.message_content = True  # modified for rag
 intents.reactions = True
 
@@ -29,7 +29,7 @@ async def on_ready():
 
 
 @client.event
-async def on_message(message):
+async def on_message(message : discord.Message):
     # avoid same message between user and the bot
     if message.author == client.user:
         return
@@ -44,6 +44,7 @@ async def on_message(message):
         await message.channel.send("Welcome to UTMIST!")
 
     else:
+        print("message.content: " + message.content)
         output = get_response_with_relevance(message.content)
         await message.channel.send(output)
 
@@ -76,6 +77,6 @@ async def update_vector_database_task():
     await client.wait_until_ready()
     update_vector_database()
 
-
-# client.run(os.environ.get("DISCORD_BOT_TOKEN")) #modified for rag
-client.run("Your Key")
+client.run(os.environ.get("DISCORD_BOT_TOKEN")) #modified for rag
+# client.run("Your Key")
+# 
