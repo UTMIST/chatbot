@@ -7,3 +7,5 @@ llama-index-vector-stores-qdrant
 numpy 
 matplotlib
 pandas
+torch
+faiss-cpu

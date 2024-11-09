@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands, tasks
 
 # modified for rag
-from app.query_with_chat_history import classify_relevance, ai_response
+from query_with_chat_history import classify_relevance, ai_response, get_response_with_relevance
 from rag_handler import ai_response, save_unanswered_queries, update_vector_database
 import os
 from pathlib import Path
@@ -11,21 +11,21 @@ from dotenv import load_dotenv
 
 intents = discord.Intents.default()
 intents.messages = True
-intents.message_content = True  # modified for rag
+# intents.message_content = True  # modified for rag
 intents.reactions = True
 
 client = discord.Client(intents=intents)
 
-# modified for rag
-env_path = Path("..") / ".env"
-load_dotenv(dotenv_path=env_path)
+# # modified for rag
+# env_path = Path("..") / ".env"
+load_dotenv()
 
 
 @client.event
 async def on_ready():
     print("Bot is now online")
-    save_unanswered_queries_task.start()  # modified for rag
-    update_vector_database_task.start()  # modified for rag
+    # save_unanswered_queries_task.start()  # modified for rag
+    # update_vector_database_task.start()  # modified for rag
 
 
 @client.event
@@ -44,9 +44,7 @@ async def on_message(message):
         await message.channel.send("Welcome to UTMIST!")
 
     else:
-        relevance = classify_relevance(message.content)  # modified for rag
-        print("relevance: ", relevance)  # modified for rag
-        output = ai_response(message.content)
+        output = get_response_with_relevance(message.content)
         await message.channel.send(output)
 
 
@@ -65,11 +63,11 @@ async def on_reaction_add(reaction, user):
     await reaction.message.channel.send(f"{user} reacted with {reaction.emoji}")
 
 
-# modified for rag
-@tasks.loop(hours=24)
-async def save_unanswered_queries_task():
-    await client.wait_until_ready()
-    await save_unanswered_queries()
+# # modified for rag
+# @tasks.loop(hours=24)
+# async def save_unanswered_queries_task():
+#     await client.wait_until_ready()
+#     await save_unanswered_queries()
 
 
 # modified for rag
